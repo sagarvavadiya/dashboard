@@ -43,6 +43,7 @@ export const counterSlice = createSlice({
     value: 0,
     user: userData() || {},
     userList: [],
+    recordList:[]
   },
   reducers: {
     increment: (state, action) => {
@@ -58,12 +59,26 @@ export const counterSlice = createSlice({
     users: (state, action) => {
       state.userList = action.payload;
     },
+    records: (state, action) => {
+      state.recordList = action.payload;
+    },
+    add_records: (state, action) => {
+      state.recordList =[...state.recordList, action.payload];
+    },
+    update_records: (state, action) => {
+      state.recordList =state.recordList.map((item) => item.id === action.payload.id ? action.payload : item); ;
+    },
+    delete_records: (state, action) => {
+      state.recordList =state.recordList.filter((item) => item.id !== action.payload.id );
+    },
   },
 });
 
-export const { increment, decrement, login, users } = counterSlice.actions;
+export const { increment, decrement, login, users,records,add_records,update_records,
+  delete_records } = counterSlice.actions;
 
 export const counterReducer = counterSlice.reducer;
+
 
 
 
@@ -135,8 +150,8 @@ export const PostFormData = (url, dataObject) => {
   });
 };
 
-
-import { increment, decrement, login, users } from './slice';
+import { GETAPI } from '../common';
+import { increment, decrement, login, users,records,add_records, update_records, delete_records } from './slice';
 export const ApiCall = params => dispatch => {
   const headers = new Headers({
     'Content-Type': 'application/json',
@@ -174,12 +189,66 @@ export const GetUserList = data => dispatch => {
     'https://api.thedogapi.com/v1/images/search?size=med&mime_types=jpg&format=json&has_breeds=true&order=RANDOM&page=0&limit=1',
   )
     .then(res => {
-      dispatch(users(data));
+      // dispatch(users(data));
     })
     .catch(err => {
       console.log('error', err);
     });
 };
+export const GetRecordList = data => dispatch => {
+  GETAPI(
+    'https://api.thedogapi.com/v1/images/search?size=med&mime_types=jpg&format=json&has_breeds=true&order=RANDOM&page=0&limit=1',
+  )
+    .then(res => {
+      // dispatch(records(data));
+    })
+    .catch(err => {
+      console.log('error', err);
+    });
+    dispatch(records(data));
+};
+export const AddRecord = data => dispatch => {
+  GETAPI(
+    'https://api.thedogapi.com/v1/images/search?size=med&mime_types=jpg&format=json&has_breeds=true&order=RANDOM&page=0&limit=1',
+  )
+    .then(res => {
+      // dispatch(add_records(data));
+    })
+    .catch(err => {
+      console.log('error', err);
+    });
+    dispatch(add_records(data));
+};
+export const UpdateRecord = data => dispatch => {
+  GETAPI(
+    'https://api.thedogapi.com/v1/images/search?size=med&mime_types=jpg&format=json&has_breeds=true&order=RANDOM&page=0&limit=1',
+  )
+    .then(res => {
+      // dispatch(update_records(data));
+    })
+    .catch(err => {
+      console.log('error', err);
+    });
+    dispatch(update_records(data));
+};
+export const DeleteRecord = data => dispatch => {
+  GETAPI(
+    'https://api.thedogapi.com/v1/images/search?size=med&mime_types=jpg&format=json&has_breeds=true&order=RANDOM&page=0&limit=1',
+  )
+    .then(res => {
+      // dispatch(delete_records(data));
+    })
+    .catch(err => {
+      console.log('error', err);
+    });
+    dispatch(delete_records(data));
+};
+
+
+
+
+
+
 
 
 
@@ -215,6 +284,7 @@ import store from './utills/redux/store';
 
 export const Routing = `
 // Router
+npm install sass formik yup redux-thunk@3.1.0 react-redux@9.1.0 @reduxjs/toolkit@2.2.1 react-bootstrap  bootstrap axios web-vitals react-router-dom
 
 import React from 'react';
 import './App.css';
@@ -1015,146 +1085,101 @@ export const PostFormData = (url, dataObject) => {
 
 export const CRUD = `
 
-import React, { useEffect, useState } from 'react';
-import { GetUserList, PostFormData, POSTAPI } from '../utills/redux/action';
+import React, { useEffect, useState, useId } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import Modal from 'react-bootstrap/Modal';
-const useForm = initialValues => {
-  const [values, setValues] = useState(initialValues);
-  const [errors, setErrors] = useState({});
-  const [touched, setTouched] = useState({}); // Tracks field interactions
+import { useFormik } from 'formik';
+import * as Yup from 'yup';
+import { v4 as uuidv4 } from 'uuid';
+import {
+  AddRecord,
+  DeleteRecord,
+  GetRecordList,
+  GetrecordList,
+  UpdateRecord,
+} from '../utills/redux/action';
+import { CommonModal } from '../components/common/Modal';
+import Record from '../components/posts/Post';
 
-  const validateField = (name, value) => {
-    let error = '';
-    switch (name) {
-      case 'name':
-        if (!value) error = 'Name is required.';
-        break;
-      case 'email':
-        if (!value) error = 'Email is required.';
-        break;
-      case 'password':
-        if (!value) error = 'Password is required.';
-        else if (value.length < 5)
-          error = 'Password must be at least 5 characters long.';
-        else if (!/(?=.*[a-z])(?=.*[A-Z])/.test(value))
-          error = 'Password must include an uppercase and a lowercase letter.';
-        break;
-      case 'image':
-        if (!value) error = 'Image is required.';
-        else if (!['image/png', 'image/jpeg'].includes(value.type))
-          error = 'Only JPG/PNG files under 1MB are allowed.';
-        break;
-      default:
-        break;
-    }
-    return error;
-  };
+const FormElement = ({ updateRecord, setUpdateRecord, onSubmit,handleClose }) => {
 
-  const handleChange = e => {
-    const { name } = e.target;
-    const newValue = e.target.files ? e.target.files[0] : e.target.value;
+  // ------------------------------------------forimic
 
-    setValues(prevValues => ({
-      ...prevValues,
-      [name]: newValue,
-    }));
-
-    if (touched[name]) {
-      // Validate immediately if the field has been touched
-      setErrors(prevErrors => ({
-        ...prevErrors,
-        [name]: validateField(name, newValue),
-      }));
-    }
-  };
-
-  const handleBlur = e => {
-    const { name } = e.target;
-    const value = e.target.files ? e.target.files[0] : e.target.value;
-    setTouched(prevTouched => ({
-      ...prevTouched,
-      [name]: true,
-    }));
-
-    setErrors(prevErrors => ({
-      ...prevErrors,
-      [name]: validateField(name, value),
-    }));
-  };
-
-  const handleSubmit = onSubmit => e => {
-    e.preventDefault();
-
-    // Validate all fields before submission
-    const newErrors = Object.keys(values).reduce((acc, field) => {
-      if (values.imageAvailable && field === 'image') {
-        return acc;
+  const formik = useFormik({
+    initialValues: {
+      name: '',
+      email: '',
+      password: '',
+      image: null,
+    },
+    validationSchema: Yup.object({
+      name: Yup.string()
+        .min(2, 'Name must be at least 2 characters')
+        .required('Name is required'),
+      email: Yup.string()
+        .email('Invalid email address')
+        .required('Email is required'),
+      password: Yup.string()
+        .min(6, 'Password must be at least 6 characters')
+        .required('Password is required'),
+      image: Yup.mixed()
+        .nullable()
+        .required('Image is required')
+        .test(
+          'fileFormat',
+          'Only valid files are allowed',
+          value => !value || value.includes('blob:') || value.includes('.'),
+        ),
+    }),
+    onSubmit: values => {
+      if (updateRecord && updateRecord.id) {
+          onSubmit({...updateRecord,...values});
+          setUpdateRecord();
+      }else{
+        onSubmit(values);
       }
-      const error = validateField(field, values[field]);
-      if (error) acc[field] = error;
-      return acc;
-    }, {});
 
-    setErrors(newErrors);
-    if (Object.keys(newErrors).length === 0) {
-      onSubmit(values);
-    }
-  };
-
-  useEffect(() => {
-    console.log({ initialValues });
-    setValues(initialValues);
-  }, [initialValues]);
-  return {
-    values,
-    errors,
-    touched,
-    handleChange,
-    handleBlur,
-    handleSubmit,
-  };
-};
-
-const FormElement = ({ updateRecord, setUpdateRecord }) => {
-  const [initialValues, setInitialValues] = useState({
-    name: '',
-    email: '',
-    password: '',
-    image: true,
+    },
   });
+
   useEffect(() => {
-    if (updateRecord.id) {
-      console.log('updateRecord', updateRecord);
-      setInitialValues(updateRecord);
+    if (updateRecord && updateRecord.id) {
+      // console.log('updateRecord', updateRecord);
+      // setInitialValues(updateRecord);
+      const existedData = [
+        { field: 'name', value: updateRecord?.name },
+        { field: 'email', value: updateRecord?.email },
+        { field: 'password', value: updateRecord?.password },
+        { field: 'image', value: updateRecord?.image },
+      ];
+
+      existedData.forEach(i => {
+        formik.setFieldValue(i?.field, i?.value);
+      });
     }
   }, [updateRecord]);
-  const { values, errors, handleChange, handleBlur, handleSubmit } =
-    useForm(initialValues);
 
-  const onSubmit = data => {
-    PostFormData(
-      updateRecord.id
-        ? 'http://localhost:3000/update'
-        : 'http://localhost:3000/dashboard',
-      data,
-    )
-      .then(res => {
-        console.log(res);
-        setUpdateRecord({});
-      })
-      .catch(err => {
-        console.log(err);
-        setUpdateRecord({});
+  const selectFile = e => {
+    if (e.target.files && e.target.files.length > 0) {
+      const file = e.target.files[0];
+      try {
+        // validateFile(file, 'images');
+      } catch (e) {
+        // toast.error(e);
+        return false;
+      }
+      formik.handleChange({
+        target: { name: e.target.name, value: URL.createObjectURL(file) },
       });
+    }
   };
 
+
   return (
-    <div style={{ padding: '20px', maxWidth: '400px', margin: 'auto' }}>
-      <form
-        onSubmit={handleSubmit(onSubmit)}
-        className='d-flex flex-column gap-3'
-      >
+    <div
+      style={{ padding: '20px', maxWidth: '400px', margin: 'auto' }}
+
+    >
+      <form onSubmit={formik.handleSubmit} className='d-flex flex-column gap-3'>
         {/* Name Field */}
         {[
           { title: 'Name', field: 'name', type: 'text' },
@@ -1166,28 +1191,47 @@ const FormElement = ({ updateRecord, setUpdateRecord }) => {
             <div className='form-group' key={index}>
               <label htmlFor='exampleInputEmail1'>{title}</label>
               {field === 'image' ? (
-                <input
-                  type={type}
-                  className='form-control'
-                  placeholder={Enter {title}}
-                  name={field}
-                  onChange={handleChange}
-                  onBlur={handleBlur}
-                />
+                <>
+                  <div>
+                    <label htmlFor='selectFile' className='cursor-pointer'>
+                      <img
+                        src={
+                          formik.values[field]
+                            ? formik.values[field]
+                            : 'data:image/png;base64,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'
+                        }
+                        className='upload-image'
+                        style={{ width: '150px' }}
+                      />
+                    </label>
+                    <input
+                      type='file'
+                      id='selectFile'
+                      className='d-none'
+                      name={field}
+                      onChange={e => selectFile(e)}
+                      onBlur={formik.handleBlur}
+                    />
+                    {formik.touched[field] && formik.errors[field] ? (
+                      <div style={{ color: 'red' }}>{formik.errors[field]}</div>
+                    ) : null}
+                  </div>
+                </>
               ) : (
-                <input
-                  type={type}
-                  className='form-control'
-                  placeholder={Enter {title}}
-                  name={field}
-                  value={values[field]}
-                  onChange={handleChange}
-                  onBlur={handleBlur}
-                />
-              )}
-
-              {errors[field] && (
-                <span style={{ color: 'red' }}>{errors[field]}</span>
+                <>
+                  <input
+                    type={type}
+                    className='form-control'
+                    placeholder={Enter ${title}}
+                    name={field}
+                    value={formik.values[field]}
+                    onChange={formik.handleChange}
+                    onBlur={formik.handleBlur}
+                  />
+                  {formik.touched[field] && formik.errors[field] ? (
+                    <div style={{ color: 'red' }}>{formik.errors[field]}</div>
+                  ) : null}
+                </>
               )}
             </div>
           );
@@ -1198,31 +1242,29 @@ const FormElement = ({ updateRecord, setUpdateRecord }) => {
         <button className='btn btn-primary' type='submit'>
           Submit
         </button>
-        <button className='btn btn-dark'>Close</button>
+        <button className='btn btn-dark' onClick={handleClose}>Close</button>
       </form>
     </div>
   );
 };
-const RemoveRecordElement = ({ deleteRecord, setDeleteRecord }) => {
-  const onSubmit = () => {
-    POSTAPI(http://localhost:3000/delete/{deleteRecord.id})
-      .then(res => {
-        console.log(res);
-        setDeleteRecord({});
-      })
-      .catch(err => {
-        console.log(err);
-      });
+const RemoveRecordElement = ({ deleteRecord, setDeleteRecord, onSubmit,handleClose }) => {
+  const handleSubmit = () => {
+    onSubmit({ ...deleteRecord, isDelete: true });
+    setDeleteRecord({});
   };
 
   return (
     <div style={{ padding: '20px', maxWidth: '400px', margin: 'auto' }}>
       <div className='d-flex flex-column gap-3'>
         <h3>Are you sure you want to delete this record?</h3>
-        <button className='btn btn-primary' type='submit' onClick={onSubmit}>
+        <button
+          className='btn btn-primary'
+          type='submit'
+          onClick={handleSubmit}
+        >
           Yes
         </button>
-        <button className='btn btn-dark'>No</button>
+        <button className='btn btn-dark' onClick={handleClose}>No</button>
       </div>
     </div>
   );
@@ -1230,6 +1272,7 @@ const RemoveRecordElement = ({ deleteRecord, setDeleteRecord }) => {
 
 const Table = () => {
   const dispatch = useDispatch();
+  const uniqId = uuidv4(); // ⇨ '9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d'
   const [show, setShow] = useState(false);
   const [updateRecord, setUpdateRecord] = useState({});
   const [deleteRecord, setDeleteRecord] = useState({});
@@ -1239,8 +1282,8 @@ const Table = () => {
     setDeleteRecord({});
   };
   const handleShow = () => setShow(true);
-  const userlist = useSelector(state => state.counter.userList);
-  const userData = [
+  const recordlist = useSelector(state => state.counter.recordList);
+  const recordData = [
     {
       id: 1,
       name: 'John',
@@ -1257,6 +1300,19 @@ const Table = () => {
     },
   ];
 
+  const onSubmit = record => {
+    if (record.isDelete) {
+      dispatch(DeleteRecord(record));
+    } else {
+      if (record.id) {
+        dispatch(UpdateRecord(record));
+      } else {
+        dispatch(AddRecord({ ...record, id: uniqId }));
+      }
+    }
+
+    handleClose();
+  };
   const onUpdate = record => {
     setUpdateRecord({ ...record, imageAvailable: true });
     handleShow();
@@ -1266,7 +1322,7 @@ const Table = () => {
     handleShow();
   };
   const GetData = () => {
-    dispatch(GetUserList(userData));
+    dispatch(GetRecordList(recordData));
   };
 
   useEffect(() => {
@@ -1274,11 +1330,19 @@ const Table = () => {
   }, []);
 
   const test = () => {
-    console.log(userlist);
+    console.log(recordlist);
   };
   return (
     <>
       <style jsx>{
+
+        .card{
+    height: 100vh;
+    border-radius: 0;
+  }
+  .card-body {
+    overflow-x: auto;
+  }
         .card-body {
           overflow-x: auto;
         }
@@ -1300,55 +1364,53 @@ const Table = () => {
           background-color: #f2f2f2;
         }
       }</style>
-      <div className='row'>
-        <div className='col-10'>
-          <div className='card'>
-            <div className='card-body'>
-              <div className='pb-2 d-flex justify-content-between align-items-center'>
-                <h5 className='card-title' onClick={test}>
-                  Manage User
-                </h5>
-                <button className='btn btn-primary' onClick={handleShow}>
-                  Add Record
-                </button>
-              </div>
+      <div className='dashboardPage'>
+        <div className='card'>
+          <div className='card-body'>
+            <div className='pb-2 d-flex justify-content-between align-items-center'>
+              <h5 className='card-title' onClick={test}>
+                Manage Record
+              </h5>
+              <button className='btn btn-primary' onClick={handleShow}>
+                Add Record
+              </button>
+            </div>
 
-              <div>
-                <table>
-                  <tr>
-                    <th>Name</th>
-                    <th>Email</th>
-                    <th>Action</th>
-                  </tr>
-                  {userlist &&
-                    userlist.length > 0 &&
-                    userlist.map((user, index) => (
-                      <tr key={index}>
-                        <td>{user.name}</td>
-                        <td>{user.email}</td>
-                        <td>
-                          <div>
-                            <button
-                              type='button'
-                              className='btn btn-primary'
-                              onClick={() => onUpdate(user)}
-                            >
-                              Edit
-                            </button>
-                            &nbsp;
-                            <button
-                              type='button'
-                              className='btn btn-danger'
-                              onClick={() => onDelete(user)}
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        </td>{' '}
-                      </tr>
-                    ))}
-                </table>
-              </div>
+            <div>
+              <table>
+                <tr>
+                  <th>Name</th>
+                  <th>Email</th>
+                  <th>Action</th>
+                </tr>
+                {recordlist &&
+                  recordlist.length > 0 &&
+                  recordlist.map((user, index) => (
+                    <tr key={index}>
+                      <td>{user.name}</td>
+                      <td>{user.email}</td>
+                      <td>
+                        <div>
+                          <button
+                            type='button'
+                            className='btn btn-primary'
+                            onClick={() => onUpdate(user)}
+                          >
+                            Edit
+                          </button>
+                          &nbsp;
+                          <button
+                            type='button'
+                            className='btn btn-danger'
+                            onClick={() => onDelete(user)}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </td>{' '}
+                    </tr>
+                  ))}
+              </table>
             </div>
           </div>
         </div>
@@ -1361,18 +1423,22 @@ const Table = () => {
             <RemoveRecordElement
               deleteRecord={deleteRecord}
               setDeleteRecord={setDeleteRecord}
+              onSubmit={onSubmit}
+              handleClose={handleClose}
             />
           ) : (
             <FormElement
               updateRecord={updateRecord}
               setUpdateRecord={setUpdateRecord}
+              onSubmit={onSubmit}
+              handleClose={handleClose}
             />
           )
         }
         title={
-          deleteRecord.id
+          deleteRecord && deleteRecord.id
             ? 'Delete Record'
-            : updateRecord.id
+            : updateRecord && updateRecord.id
             ? 'Update Record'
             : 'Add Record'
         }
@@ -1383,7 +1449,10 @@ const Table = () => {
 
 export default Table;
 
-function CommonModal({ show, handleClose, children, title }) {
+
+import { Modal } from "react-bootstrap";
+
+export function CommonModal({ show, handleClose, children, title }) {
   return (
     <>
       <Modal show={show} onHide={handleClose}>
@@ -1395,6 +1464,7 @@ function CommonModal({ show, handleClose, children, title }) {
     </>
   );
 }
+
 
 `;
 
